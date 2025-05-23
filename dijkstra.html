@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dijkstra's Algorithm Visualization</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .visualization, .controls-code, .table-container {
+            background-color: #fff;
+            padding: 15px;
+            margin: 10px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .visualization {
+            flex: 2;
+            min-width: 530px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            background-color: #fdfdfd;
+        }
+        .controls-code {
+            flex: 1.5;
+            min-width: 430px;
+            display: flex;
+            flex-direction: column;
+        }
+        .controls button {
+            padding: 10px 15px;
+            margin: 5px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+        .controls button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #code-display {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            background-color: #282c34;
+            color: #abb2bf;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.5em;
+        }
+        #code-display .line {
+            display: block;
+            transition: background-color 0.3s;
+        }
+        #code-display .highlight {
+            background-color: #f3c629;
+            color: #282c34;
+            font-weight: bold;
+        }
+        #code-display .sub-highlight {
+            background-color: #79a8d7;
+            color: #282c34;
+        }
+        .table-container {
+            flex: 1;
+            min-width: 250px;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #e9ecef;
+        }
+        .current-row td {
+            background-color: #ffeeba;
+        }
+        .visited-row td {
+            background-color: #d4edda;
+        }
+        #start-node-selector {
+            padding: 8px;
+            margin: 5px 0 10px 0;
+            font-size: 16px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dijkstra's Algorithm Visualization</h1>
+
+    <div class="container">
+        <div class="visualization">
+            <h2>Graph</h2>
+            <canvas id="graphCanvas" width="500" height="400"></canvas>
+        </div>
+
+        <div class="controls-code">
+            <div class="controls">
+                <h2>Controls</h2>
+                <label for="start-node-selector">Start Node:</label>
+                <select id="start-node-selector"></select>
+                <button id="startButton">Start</button>
+                <button id="nextStepButton" disabled>Next Step</button>
+                <button id="autoPlayButton">Auto-Play</button> <!-- ADDED BUTTON -->
+                <button id="resetButton">Reset</button>
+            </div>
+            <h2>Pseudocode</h2>
+            <div id="code-display"></div>
+        </div>
+
+        <div class="table-container">
+            <h2>Distance Table</h2>
+            <table id="dijkstraTable">
+                <thead>
+                    <tr>
+                        <th>Node</th>
+                        <th>Distance</th>
+                        <th>Previous</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        const codeDisplay = document.getElementById('code-display');
+        const dijkstraTableBody = document.querySelector('#dijkstraTable tbody');
+        const startButton = document.getElementById('startButton');
+        const nextStepButton = document.getElementById('nextStepButton');
+        const resetButton = document.getElementById('resetButton');
+        const startNodeSelector = document.getElementById('start-node-selector');
+        const autoPlayButton = document.getElementById('autoPlayButton'); // Get auto-play button
+
+        const NODE_RADIUS = 20;
+        const NODE_COLOR = '#007bff';
+        const NODE_VISITED_COLOR = '#28a745';
+        const NODE_CURRENT_COLOR = '#ffc107';
+        const NODE_NEIGHBOR_COLOR = '#17a2b8';
+        const EDGE_COLOR = '#6c757d';
+        const EDGE_PATH_COLOR = '#dc3545';
+        const TEXT_COLOR = '#ffffff';
+        const WEIGHT_COLOR = '#000000';
+
+        const nodes = {
+            'A': { x: 100, y: 100, id: 'A' }, 'B': { x: 250, y: 70, id: 'B' },
+            'C': { x: 200, y: 200, id: 'C' }, 'D': { x: 350, y: 150, id: 'D' },
+            'E': { x: 300, y: 300, id: 'E' }, 'F': { x: 450, y: 250, id: 'F' }
+        };
+        const edges = [
+            { from: 'A', to: 'B', weight: 4 }, { from: 'A', to: 'C', weight: 2 },
+            { from: 'B', to: 'C', weight: 1 }, { from: 'B', to: 'D', weight: 5 },
+            { from: 'C', to: 'E', weight: 3 }, { from: 'D', to: 'E', weight: 2 },
+            { from: 'D', to: 'F', weight: 2 }, { from: 'E', to: 'F', weight: 1 }
+        ];
+
+        Object.keys(nodes).forEach(nodeId => {
+            const option = document.createElement('option');
+            option.value = nodeId; option.textContent = nodeId;
+            startNodeSelector.appendChild(option);
+        });
+        if (startNodeSelector.options.length > 0) startNodeSelector.value = startNodeSelector.options[0].value;
+
+        const pseudocodeLines = [
+            "1. function Dijkstra(Graph, source):", "2.   create vertex set Q", "3.",
+            "4.   for each vertex v in Graph:", "5.     dist[v] ← INFINITY",
+            "6.     prev[v] ← UNDEFINED", "7.     add v to Q", "8.   dist[source] ← 0", "9.",
+            "10.  while Q is not empty:", "11.    u ← vertex in Q with min dist[u]",
+            "12.    remove u from Q", "13.", "14.    for each neighbor v of u still in Q:",
+            "15.      alt ← dist[u] + length(u, v)", "16.      if alt < dist[v]:",
+            "17.        dist[v] ← alt", "18.        prev[v] ← u", "19.", "20.  return dist, prev"
+        ];
+
+        function displayCode() {
+            codeDisplay.innerHTML = '';
+            pseudocodeLines.forEach((line, index) => {
+                const lineSpan = document.createElement('span');
+                lineSpan.classList.add('line'); lineSpan.id = `line-${index}`;
+                lineSpan.textContent = line; codeDisplay.appendChild(lineSpan);
+            });
+        }
+
+        let currentHighlights = [];
+        function highlightCode(lineNumbers, isSubHighlight = false) {
+            currentHighlights.forEach(ln => document.getElementById(`line-${ln}`)?.classList.remove('highlight', 'sub-highlight'));
+            currentHighlights = Array.isArray(lineNumbers) ? lineNumbers : [lineNumbers];
+            currentHighlights.forEach(ln => document.getElementById(`line-${ln}`)?.classList.add(isSubHighlight ? 'sub-highlight' : 'highlight'));
+        }
+
+        let dist, prev, Q, startNode, dijkstraGeneratorInstance;
+        let visualState = {};
+        let autoPlayIntervalId = null;
+        let isAutoPlaying = false;
+        let algorithmFinished = false;
+
+        function initializeAlgorithm() {
+            startNode = startNodeSelector.value;
+            dist = {}; prev = {}; Q = new Set();
+            visualState = { currentNode: null, currentNeighbor: null, visited: new Set(), pathEdges: [] };
+            Object.keys(nodes).forEach(nodeId => {
+                dist[nodeId] = Infinity; prev[nodeId] = undefined; Q.add(nodeId);
+            });
+            dist[startNode] = 0;
+            
+            algorithmFinished = false; // Reset completion flag
+            dijkstraGeneratorInstance = dijkstraGenerator(nodes, edges, startNode);
+            
+            updateTable(); drawGraph(); highlightCode([]);
+            startButton.disabled = true;
+            nextStepButton.disabled = false;
+            autoPlayButton.disabled = false; // Enable auto-play
+            autoPlayButton.textContent = "Auto-Play";
+            startNodeSelector.disabled = true;
+        }
+        
+        function* dijkstraGenerator(graphNodes, graphEdges, source) {
+            const adj = {};
+            Object.keys(graphNodes).forEach(nodeId => adj[nodeId] = []);
+            graphEdges.forEach(edge => {
+                adj[edge.from].push({ node: edge.to, weight: edge.weight });
+                adj[edge.to].push({ node: edge.from, weight: edge.weight });
+            });
+
+            highlightCode([1,2]); yield;
+            highlightCode([4,5,6,7]); yield;
+            highlightCode([8]); yield;
+
+            while (Q.size > 0) {
+                highlightCode([10]); yield;
+                let u = null, minDistance = Infinity;
+                Q.forEach(nodeId => { if (dist[nodeId] < minDistance) { minDistance = dist[nodeId]; u = nodeId; } });
+                
+                highlightCode([11]); visualState.currentNode = u; visualState.currentNeighbor = null;
+                drawGraph(); updateTable(u); yield;
+
+                if (u === null || dist[u] === Infinity) break; 
+
+                Q.delete(u); visualState.visited.add(u);
+                highlightCode([12]); drawGraph(); updateTable(u); yield;
+                
+                const neighbors = adj[u] || [];
+                highlightCode([14]); yield;
+
+                for (let edge of neighbors) {
+                    let v = edge.node;
+                    if (Q.has(v)) {
+                        visualState.currentNeighbor = v; drawGraph(); updateTable(u, v);
+                        highlightCode([14], true); yield;
+                        let alt = dist[u] + edge.weight;
+                        highlightCode([15]); drawGraph(); yield;
+                        highlightCode([16]); yield;
+                        if (alt < dist[v]) {
+                            dist[v] = alt; prev[v] = u;
+                            highlightCode([17, 18]); updateTable(u,v); drawGraph(); yield;
+                        }
+                    }
+                    visualState.currentNeighbor = null;
+                }
+                visualState.currentNode = null;
+            }
+            
+            highlightCode([20]); visualState.currentNode = null; visualState.currentNeighbor = null;
+            drawGraph(); 
+            yield { done: true }; // Indicate completion to the calling logic
+        }
+
+        function drawNode(nodeId, color = NODE_COLOR) { /* ... (same as before) ... */ 
+            const node = nodes[nodeId]; ctx.beginPath(); ctx.arc(node.x, node.y, NODE_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = TEXT_COLOR; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = 'bold 14px sans-serif'; ctx.fillText(node.id, node.x, node.y);
+        }
+        function drawEdge(edge, color = EDGE_COLOR, lineWidth = 2) { /* ... (same as before) ... */
+            const fromNode = nodes[edge.from]; const toNode = nodes[edge.to]; ctx.beginPath();
+            ctx.moveTo(fromNode.x, fromNode.y); ctx.lineTo(toNode.x, toNode.y);
+            ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.stroke();
+            const midX = (fromNode.x + toNode.x) / 2, midY = (fromNode.y + toNode.y) / 2;
+            const offsetX = (toNode.y - fromNode.y) * 0.1, offsetY = (fromNode.x - toNode.x) * 0.1;
+            ctx.fillStyle = WEIGHT_COLOR; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom'; ctx.fillText(edge.weight, midX + offsetX, midY + offsetY);
+        }
+        function drawGraph() { /* ... (same as before, ensure path highlighting logic is what you want) ... */
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            edges.forEach(edge => {
+                let isPathEdge = false;
+                if ( (prev[edge.from] === edge.to && visualState.visited.has(edge.from)) || 
+                     (prev[edge.to] === edge.from && visualState.visited.has(edge.to)) ) { /* isPathEdge = true; */ }
+                if (visualState.currentNode && ( (prev[visualState.currentNode] === edge.from && edge.to === visualState.currentNode) || (prev[visualState.currentNode] === edge.to && edge.from === visualState.currentNode) )) isPathEdge = true;
+                if (visualState.currentNeighbor && ( (prev[visualState.currentNeighbor] === edge.from && edge.to === visualState.currentNeighbor) || (prev[visualState.currentNeighbor] === edge.to && edge.from === visualState.currentNeighbor) )) isPathEdge = true;
+                drawEdge(edge, isPathEdge ? EDGE_PATH_COLOR : EDGE_COLOR, isPathEdge ? 3 : 2);
+            });
+            Object.keys(nodes).forEach(nodeId => {
+                let color = NODE_COLOR;
+                if (visualState.visited.has(nodeId)) color = NODE_VISITED_COLOR;
+                if (nodeId === visualState.currentNode) color = NODE_CURRENT_COLOR;
+                else if (nodeId === visualState.currentNeighbor) color = NODE_NEIGHBOR_COLOR;
+                drawNode(nodeId, color);
+            });
+        }
+        function updateTable(currentNodeId = null, currentNeighborId = null) { /* ... (same as before) ... */
+            dijkstraTableBody.innerHTML = '';
+            Object.keys(nodes).sort().forEach(nodeId => {
+                const row = dijkstraTableBody.insertRow();
+                row.insertCell().textContent = nodeId;
+                row.insertCell().textContent = dist[nodeId] === Infinity ? '∞' : dist[nodeId];
+                row.insertCell().textContent = prev[nodeId] === undefined ? '-' : prev[nodeId];
+                if (visualState.visited.has(nodeId) && nodeId !== currentNodeId) row.classList.add('visited-row');
+                if (nodeId === currentNodeId) row.classList.add('current-row');
+                else if (nodeId === currentNeighborId && dist[nodeId] !== Infinity) row.cells[0].style.backgroundColor = '#e2e3e5';
+            });
+        }
+
+        function handleNextStep() {
+            if (algorithmFinished || !dijkstraGeneratorInstance) {
+                return false; // Cannot step if already finished or not initialized
+            }
+
+            const result = dijkstraGeneratorInstance.next();
+            if (result.done || (result.value && result.value.done)) {
+                algorithmFinished = true;
+                nextStepButton.disabled = true;
+                startButton.disabled = true; 
+                
+                if (isAutoPlaying) {
+                    stopAutoPlay(true); // Algorithm finished naturally during auto-play
+                } else {
+                    // Finished via manual step, update Auto-Play button
+                    autoPlayButton.textContent = "Auto-Play";
+                    autoPlayButton.disabled = true; // Disable until reset
+                }
+                alert("Dijkstra's Algorithm Complete!");
+                return false; // Algorithm has finished
+            }
+            return true; // Algorithm can continue
+        }
+
+        function stopAutoPlay(naturallyFinished) {
+            isAutoPlaying = false;
+            if (autoPlayIntervalId) {
+                clearInterval(autoPlayIntervalId);
+                autoPlayIntervalId = null;
+            }
+            if (naturallyFinished) {
+                autoPlayButton.textContent = "Auto-Play";
+                autoPlayButton.disabled = true; // Disable until reset
+                nextStepButton.disabled = true;
+            } else { // Paused by user or reset
+                autoPlayButton.textContent = "Resume Auto-Play";
+                 if (!algorithmFinished) { // Only enable next step if not finished
+                    nextStepButton.disabled = false;
+                }
+            }
+        }
+
+        function toggleAutoPlay() {
+            if (isAutoPlaying) { // ---- PAUSE ----
+                isAutoPlaying = false;
+                clearInterval(autoPlayIntervalId);
+                autoPlayIntervalId = null;
+                autoPlayButton.textContent = "Resume Auto-Play";
+                if (!algorithmFinished) {
+                    nextStepButton.disabled = false;
+                }
+            } else { // ---- START / RESUME ----
+                if (algorithmFinished) {
+                    alert("Algorithm already completed. Please Reset.");
+                    return;
+                }
+                
+                if (!dijkstraGeneratorInstance) { // If not started yet
+                    initializeAlgorithm();
+                    if (algorithmFinished) { // initializeAlgorithm itself might lead to immediate finish
+                        stopAutoPlay(true); // Ensure buttons reflect finished state
+                        return;
+                    }
+                }
+
+                isAutoPlaying = true;
+                autoPlayButton.textContent = "Pause Auto-Play";
+                startButton.disabled = true;
+                nextStepButton.disabled = true;
+                startNodeSelector.disabled = true;
+
+                // Perform the first step immediately, then set interval
+                if (handleNextStep()) { // If not finished on the very first step
+                    autoPlayIntervalId = setInterval(() => {
+                        if (!handleNextStep()) {
+                            // stopAutoPlay(true) will be called from within handleNextStep
+                            // if algorithm finishes during an interval step
+                        }
+                    }, 500); // 0.5 second interval
+                } else {
+                    // Algorithm finished on the very first step after initialization/resume
+                    // stopAutoPlay(true) would have been called by handleNextStep
+                }
+            }
+        }
+
+        function resetVisualization() {
+            if (isAutoPlaying) {
+                stopAutoPlay(false); // Stop auto-play, not naturally finished
+            }
+            algorithmFinished = false;
+
+            dist = {}; prev = {}; Q = new Set();
+            visualState = { currentNode: null, currentNeighbor: null, visited: new Set(), pathEdges: [] };
+            dijkstraGeneratorInstance = null;
+            
+            Object.keys(nodes).forEach(nodeId => {
+                dist[nodeId] = Infinity; prev[nodeId] = undefined;
+            });
+
+            updateTable(); drawGraph(); displayCode(); highlightCode([]);
+            
+            startButton.disabled = false;
+            nextStepButton.disabled = true;
+            autoPlayButton.disabled = false;
+            autoPlayButton.textContent = "Auto-Play";
+            startNodeSelector.disabled = false;
+        }
+
+        // Event Listeners
+        startButton.addEventListener('click', initializeAlgorithm);
+        nextStepButton.addEventListener('click', handleNextStep);
+        autoPlayButton.addEventListener('click', toggleAutoPlay); // Add listener for auto-play
+        resetButton.addEventListener('click', resetVisualization);
+
+        // Initial setup
+        displayCode();
+        resetVisualization(); 
+
+    </script>
+</body>
+</html>
