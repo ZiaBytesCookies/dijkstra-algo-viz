@@ -46,10 +46,6 @@ This project is ideal for:
 - CSS3 (Flexbox, responsive design)
 - Vanilla JavaScript (no frameworks!)
 
-## 🖼️ Screenshot
-
-> *(Insert a screenshot or screen recording of the visualization here)*
-
 ## 📄 License
 
 MIT License. Feel free to use and adapt it for educational or personal projects.
